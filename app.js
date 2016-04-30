@@ -11,11 +11,18 @@ module.exports = function(config) {
   app.use(bodyParser.json());
   app.use(express.static(config.webServer.rootFolder));
   app.use(function(req, res, next) {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
-    res.header('Access-Control-Allow-Headers', 'authToken, Origin, X-Requested-With, Content-Type, Accept');
+	  	res.header('Access-Control-Allow-Origin', "*");
+	    res.header('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE');
+	    res.header('Access-Control-Max-Age', '86400');
+	    res.header('Access-Control-Allow-Headers', 'authToken, Origin, X-Requested-With, Content-Type, Accept, trv-correlationid, trv-sessionid');
+	    
+		
     next();
   });
+  
+  app.options('*', function(req, res) {
+	    res.send(200);
+	});
   
   //configure routes
   require('./server/routes/sensorsRoutes')(app);

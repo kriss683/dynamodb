@@ -4,74 +4,90 @@
  * Module dependencies
  */
 var path = require('path'),
-  uuid = require('node-uuid'),
-  AWS = require('aws-sdk'); 
+  AWS = require('aws-sdk'),
+  standardResponse = require('../components/standardResponse'),
+  utils = require('../components/commonFunctions'),
+  docClient = require('../components/databaseClient'),
+  preparePrevent = require('../components/preparePrevent'),
+  config = require('../../../config/config');
 
-var config = require('../../../config/config');
-AWS.config.update(config.awsConfig);
-var docClient = new AWS.DynamoDB.DocumentClient();
-
-/**
- * Create an Analytic item
- */
-exports.addSensor = function (req, res) {
-	var params = {
-			TableName: config.awsTableName,
-			Item:{
-		        'sensor_id': Math.floor(Math.random()*Math.random()*1000),
-		        'sensor_name': req.body.sensor_name ,
-		        'sensor_friendly_name': req.body.sensor_friendly_name,
-		        'room': req.body.room,
-		        'status':  req.body.status,
-		        'data':[]
-		    }
-	};
-	      
-	docClient.put(params, function(err, data) {
-	         if(err){
-	        	 console.log(err);
-	        	 res.json({status:'fail'});
-	         }else{
-	        	 res.json({status:'success'});
-	         }
-	});
-};
-
-exports.addSensorData = function(req,res){
-	var params = {
-			TableName: config.awsTableName,
-			Key: {sensor_id: req.body.sensor_id},
-			UpdateExpression: "SET #data = list_append(#data, :dataToAdd)",
-			ExpressionAttributeNames : {
-				  "#data" : "data"
-				},
-			ExpressionAttributeValues:{
-		        ":dataToAdd" : [{"dateTime": req.body.dateTime, "value": req.body.dataValue}]
-			}
-			
-	};
-	      
-	docClient.update(params, function(err, data) {
-	         if(err){
-	        	 console.log(err);
-	        	 res.json({status:'fail'});
-	         }else{
-	        	 res.json({status:'success'});
-	         }
-	});
-	
-};
-
+//Get list of sensors by userID
 exports.getSensors = function(req,res){
-	  var params = {
-			  'TableName': config.awsTableName
-	  };
-
-	  docClient.scan(params, function(err, data) {
-			    if (err) {
+			var sensorsList = [];
+	
+			var params = {
+					  'TableName': config.awsSensors,
+					  KeyConditionExpression: "#id = :userId",
+					  ExpressionAttributeNames:{
+						  "#id": "id"
+					    },
+					    ExpressionAttributeValues: {
+					        ":userId":req.params.userId
+					    }
+			  };
+	  
+			docClient.query(params, function(err, data) {
+				if (err) {
 			        res.json({status:'error'});
-			    }else {
-			        res.json(data.Items);
-			    }
-	 });
+			        console.log(err);
+			    }else{
+			    	var sensorsList = data.Items[0].sensors;
+			    
+					getLatestSensorData(function(latestDataList){
+						console.log("latest data list");
+						console.log(latestDataList);
+							for(var i = 0; i< sensorsList.length; i++){
+								sensorsList[i].status = "GOOD";
+								for(var j = latestDataList.length -1; j >= 0; j--){
+									if(sensorsList[i].sensorId == latestDataList[j].payload.ip){
+										sensorsList[i].latestSensorValue = latestDataList[j].value;
+										sensorsList[i].latestSensorReading = new Date(Number(latestDataList[j].key));
+										if(sensorsList[i].latestSensorValue >= sensorsList[i].limits.highValueThreshold || sensorsList[i].latestSensorValue <= sensorsList[i].limits.lowValueThreshold){
+											sensorsList[i].status = "WARNING";
+											sensorsList[i].preparePrevent = preparePrevent.getPreparePreventContent(sensorsList[i].sensorType);
+										}else{
+											sensorsList[i].status = "GOOD";
+										}
+										
+										break;
+									}
+								}
+							}
+						        res.json(standardResponse(null,sensorsList));
+					});	
+				}
+			});
 };
+
+//Get All Sensors
+exports.getAllSensors = function(req,res){
+		var params = {
+				  'TableName': config.awsSensors,
+		};
+		docClient.scan(params, function(err, data) {
+		    if (err) {
+		        res.json({status:'error'});
+		    }else {
+		    	res.json(standardResponse(null,data.Items));
+		    }
+		});
+};
+
+
+function getLatestSensorData(callback){
+	var params = {
+				  'TableName': config.awsSensorValues
+		  };
+	docClient.scan(params, function(err, data) {
+			if (err) {
+				console.log('Error in getlatestSensorData');
+		        callback(sensorId,false);
+		    }else {
+		    	var latestData = (data.Items).sort(utils.sortByProperty("key") );
+		    	callback(latestData);
+				
+		    }
+	});
+};
+
+
