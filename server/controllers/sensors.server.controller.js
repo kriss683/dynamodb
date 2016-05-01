@@ -35,7 +35,7 @@ exports.getSensors = function(req,res){
 			    
 					getLatestSensorData(function(latestDataList){
 						console.log("latest data list");
-						console.log(latestDataList);
+						
 							for(var i = 0; i< sensorsList.length; i++){
 								sensorsList[i].status = "GOOD";
 								for(var j = latestDataList.length -1; j >= 0; j--){

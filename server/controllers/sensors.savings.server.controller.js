@@ -8,7 +8,8 @@ var path = require('path'),
   standardResponse = require('../components/standardResponse'),
   utils = require('../components/commonFunctions'),
   docClient = require('../components/databaseClient'),
-  savingsUtils = require('../components/savingsCalculators'),
+  savingsUtil = require('../components/savingsCalculators'),
+  mathUtil = require('mathjs'),
   config = require('../../../config/config');
 
 
@@ -39,27 +40,24 @@ exports.getSavingsData = function(req,res){
 	    	}
 	    
 			getLatestSensorData(sensorIdList, function(latestDataList){
-				var savingsCalc = {};		
+				var savingsCalc = {alertTriggered: [], warningTriggered: []};		
 				for(var j = latestDataList.length -1; j >= 0; j--){
 							for(var i = 0; i< sensorsList.length; i++){
 								
 								if(sensorsList[i].sensorId == latestDataList[j].payload.ip){
-									savingsCalc = savingsUtil.calcSingleSavings(latestDataList[j].value,savingsCalc);
-								/*	sensorsList[i].latestSensorValue = latestDataList[j].value;
-									sensorsList[i].latestSensorReading = new Date(Number(latestDataList[j].key));
-									if(sensorsList[i].latestSensorValue >= sensorsList[i].limits.highValueThreshold || sensorsList[i].latestSensorValue <= sensorsList[i].limits.lowValueThreshold){
-										sensorsList[i].status = "WARNING";
-									}else{
-										sensorsList[i].status = "GOOD";
-									}
-									
-									break;
-								*/
+									savingsCalc = savingsUtil.calcSingleSavings(latestDataList[j].value,sensorsList[i].sensorType, savingsCalc);
+								
 								}
 						}
 					}
-						console.log(savingsCalc);
-				        res.json(standardResponse(null,latestDataList));
+				
+						var policyEndDate = new Date();
+						policyEndDate.setDate(policyEndDate.getDate() + 30);
+						var response = {
+							estimatedSavings: savingsUtil.calcTotalSavings(savingsCalc).toFixed(1),
+							policyEndDate: policyEndDate
+						};
+						res.json(standardResponse(null,response));
 			});	
 		}
 	});
